@@ -1,5 +1,12 @@
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect, useCallback } from 'react'
 import '../module.css'
+
+const DEFAULT_WIDTH = 820
+const DEFAULT_HEIGHT = 600
+const MIN_WIDTH = 480
+const MIN_HEIGHT = 360
+
+type ResizeDir = 'left' | 'top' | 'corner'
 
 interface Contact {
   id: string
@@ -57,7 +64,66 @@ export function ChatWidget() {
   const [contacts, setContacts] = useState<Contact[]>(mockContacts)
   const [messagesMap, setMessagesMap] = useState<Record<string, Message[]>>(mockMessages)
   const [input, setInput] = useState('')
+  const [size, setSize] = useState({ width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT })
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const resizeRef = useRef<{
+    dir: ResizeDir
+    startX: number
+    startY: number
+    startWidth: number
+    startHeight: number
+  } | null>(null)
+
+  const startResize = useCallback(
+    (dir: ResizeDir) => (e: React.MouseEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      resizeRef.current = {
+        dir,
+        startX: e.clientX,
+        startY: e.clientY,
+        startWidth: size.width,
+        startHeight: size.height,
+      }
+      document.body.style.userSelect = 'none'
+      document.body.style.cursor =
+        dir === 'corner' ? 'nwse-resize' : dir === 'left' ? 'ew-resize' : 'ns-resize'
+    },
+    [size.width, size.height],
+  )
+
+  useEffect(() => {
+    const handleMove = (e: MouseEvent) => {
+      const st = resizeRef.current
+      if (!st) return
+      const maxWidth = window.innerWidth - 48
+      const maxHeight = window.innerHeight - 96
+      let nextWidth = st.startWidth
+      let nextHeight = st.startHeight
+      if (st.dir === 'left' || st.dir === 'corner') {
+        nextWidth = st.startWidth - (e.clientX - st.startX)
+        nextWidth = Math.min(Math.max(nextWidth, MIN_WIDTH), maxWidth)
+      }
+      if (st.dir === 'top' || st.dir === 'corner') {
+        nextHeight = st.startHeight - (e.clientY - st.startY)
+        nextHeight = Math.min(Math.max(nextHeight, MIN_HEIGHT), maxHeight)
+      }
+      setSize({ width: nextWidth, height: nextHeight })
+    }
+    const handleUp = () => {
+      if (resizeRef.current) {
+        resizeRef.current = null
+        document.body.style.userSelect = ''
+        document.body.style.cursor = ''
+      }
+    }
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+    return () => {
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+    }
+  }, [])
 
   const totalUnread = contacts.reduce((sum, c) => sum + (c.unread ?? 0), 0)
   const activeContact = activeId ? contacts.find((c) => c.id === activeId) : undefined
@@ -115,7 +181,22 @@ export function ChatWidget() {
       )}
 
       {open && (
-        <div className="oa-chat-widget__panel">
+        <div
+          className="oa-chat-widget__panel"
+          style={{ width: size.width, height: size.height }}
+        >
+          <div
+            className="oa-chat-widget__resize oa-chat-widget__resize--left"
+            onMouseDown={startResize('left')}
+          />
+          <div
+            className="oa-chat-widget__resize oa-chat-widget__resize--top"
+            onMouseDown={startResize('top')}
+          />
+          <div
+            className="oa-chat-widget__resize oa-chat-widget__resize--corner"
+            onMouseDown={startResize('corner')}
+          />
           <div className="oa-chat-widget__header">
             <div className="oa-chat-widget__title">聊天</div>
             <button

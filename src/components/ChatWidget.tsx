@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useRef, useState, useEffect } from 'react'
 import '../module.css'
 
 interface Contact {
@@ -45,24 +44,28 @@ const mockMessages: Record<string, Message[]> = {
   ],
   '4': [
     { id: 'm8', sender: '王工', avatar: '王', content: 'React 19 的新特性很不错', time: '昨天 14:00' },
+    { id: 'm9', sender: '赵工', avatar: '赵', content: '是的，Server Components 让开发体验提升很多', time: '昨天 14:05' },
   ],
   '5': [
-    { id: 'm9', sender: '王芳', avatar: '王', content: '周五的会议记得参加', time: '周一 17:00' },
+    { id: 'm10', sender: '王芳', avatar: '王', content: '周五的会议记得参加', time: '周一 17:00' },
   ],
 }
 
 export function ChatWidget() {
-  const navigate = useNavigate()
   const [open, setOpen] = useState(false)
-  const [expanded, setExpanded] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
-  const [contacts] = useState(mockContacts)
+  const [contacts, setContacts] = useState<Contact[]>(mockContacts)
   const [messagesMap, setMessagesMap] = useState<Record<string, Message[]>>(mockMessages)
   const [input, setInput] = useState('')
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const totalUnread = contacts.reduce((sum, c) => sum + (c.unread ?? 0), 0)
+  const activeContact = activeId ? contacts.find((c) => c.id === activeId) : undefined
+  const messages = activeId ? messagesMap[activeId] ?? [] : []
 
-  const activeMessages = activeId ? messagesMap[activeId] ?? [] : []
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages.length, activeId])
 
   const handleSend = () => {
     const text = input.trim()
@@ -81,15 +84,17 @@ export function ChatWidget() {
       ...prev,
       [activeId]: [...(prev[activeId] ?? []), newMsg],
     }))
+    setContacts((prev) =>
+      prev.map((c) => (c.id === activeId ? { ...c, lastMessage: text, time } : c)),
+    )
     setInput('')
   }
 
-  const toggleOpen = () => {
-    setOpen(!open)
-    if (!open) {
-      setExpanded(false)
-      setActiveId(null)
-    }
+  const handleSelect = (contactId: string) => {
+    setActiveId(contactId)
+    setContacts((prev) =>
+      prev.map((c) => (c.id === contactId ? { ...c, unread: 0 } : c)),
+    )
   }
 
   return (
@@ -97,7 +102,7 @@ export function ChatWidget() {
       {!open && (
         <button
           className="oa-chat-widget__fab"
-          onClick={toggleOpen}
+          onClick={() => setOpen(true)}
           aria-label="打开聊天"
         >
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -112,119 +117,110 @@ export function ChatWidget() {
       {open && (
         <div className="oa-chat-widget__panel">
           <div className="oa-chat-widget__header">
-            <div className="oa-chat-widget__title">
-              {expanded && activeId
-                ? contacts.find((c) => c.id === activeId)?.name ?? '聊天'
-                : '消息'}
-            </div>
-            <div className="oa-chat-widget__actions">
-              <button
-                className="oa-chat-widget__icon-btn"
-                onClick={() => {
-                  if (expanded) {
-                    setExpanded(false)
-                    setActiveId(null)
-                  } else {
-                    setOpen(false)
-                  }
-                }}
-                aria-label={expanded ? '收起' : '最小化'}
-              >
-                {expanded ? '—' : '×'}
-              </button>
-            </div>
+            <div className="oa-chat-widget__title">聊天</div>
+            <button
+              className="oa-chat-widget__icon-btn"
+              onClick={() => setOpen(false)}
+              aria-label="关闭"
+            >
+              ×
+            </button>
           </div>
 
           <div className="oa-chat-widget__body">
-            {!expanded ? (
-              <ul className="oa-chat-widget__list">
+            <aside className="oa-chat-widget__sidebar">
+              <div className="oa-chat-widget__sidebar-header">最近会话</div>
+              <ul className="oa-chat-widget__sidebar-list">
                 {contacts.map((c) => (
                   <li
                     key={c.id}
-                    className="oa-chat-widget__item"
-                    onClick={() => {
-                      setActiveId(c.id)
-                      setExpanded(true)
-                    }}
+                    className={`oa-chat-widget__sidebar-item ${c.id === activeId ? 'oa-chat-widget__sidebar-item--active' : ''}`}
+                    onClick={() => handleSelect(c.id)}
                   >
-                    <div className="oa-chat-widget__avatar">{c.avatar}</div>
-                    <div className="oa-chat-widget__item-info">
-                      <div className="oa-chat-widget__item-name">
+                    <div className="oa-chat-widget__sidebar-avatar">{c.avatar}</div>
+                    <div className="oa-chat-widget__sidebar-info">
+                      <div className="oa-chat-widget__sidebar-name">
                         {c.name}
                         {c.online && <span className="oa-chat-widget__online-dot" />}
                       </div>
-                      <div className="oa-chat-widget__item-preview">{c.lastMessage}</div>
+                      <div className="oa-chat-widget__sidebar-preview">{c.lastMessage}</div>
                     </div>
-                    <div className="oa-chat-widget__item-right">
-                      <span className="oa-chat-widget__item-time">{c.time}</span>
-                      {c.unread ? <span className="oa-chat-widget__mini-badge">{c.unread}</span> : null}
+                    <div className="oa-chat-widget__sidebar-right">
+                      <span className="oa-chat-widget__sidebar-time">{c.time}</span>
+                      {c.unread ? (
+                        <span className="oa-chat-widget__sidebar-badge">
+                          {c.unread > 99 ? '99+' : c.unread}
+                        </span>
+                      ) : null}
                     </div>
                   </li>
                 ))}
               </ul>
-            ) : (
-              <>
-                <div className="oa-chat-widget__messages">
-                  {activeMessages.map((msg) => (
-                    <div
-                      key={msg.id}
-                      className={`oa-chat-widget__msg ${msg.self ? 'oa-chat-widget__msg--self' : ''}`}
-                    >
-                      <div className="oa-chat-widget__msg-avatar">{msg.avatar}</div>
-                      <div className="oa-chat-widget__msg-body">
-                        <div className="oa-chat-widget__msg-meta">
-                          <span>{msg.sender}</span>
-                          <span>{msg.time}</span>
-                        </div>
-                        <div className="oa-chat-widget__msg-bubble">{msg.content}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="oa-chat-widget__input">
-                  <input
-                    type="text"
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleSend()
-                    }}
-                    placeholder="输入消息"
-                  />
-                  <button
-                    className="oa-chat-widget__send"
-                    onClick={handleSend}
-                    disabled={!input.trim()}
-                    aria-label="发送"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M22 2L11 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+            </aside>
 
-          <div className="oa-chat-widget__footer">
-            {!expanded ? (
-              <button
-                className="oa-chat-widget__footer-btn"
-                onClick={() => navigate('/chat')}
-              >
-                打开完整聊天
-              </button>
-            ) : (
-              <button
-                className="oa-chat-widget__footer-btn"
-                onClick={() => {
-                  if (activeId) navigate(`/chat/${activeId}`)
-                }}
-              >
-                在新窗口查看
-              </button>
-            )}
+            <section className="oa-chat-widget__main">
+              {activeId && activeContact ? (
+                <>
+                  <div className="oa-chat-widget__main-header">
+                    <div className="oa-chat-widget__main-title">{activeContact.name}</div>
+                    <div className="oa-chat-widget__main-status">
+                      {activeContact.online ? (
+                        <><span className="oa-chat-widget__online-dot" /> 在线</>
+                      ) : (
+                        <span style={{ color: '#bfbfbf' }}>离线</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="oa-chat-widget__messages">
+                    {messages.map((msg) => (
+                      <div
+                        key={msg.id}
+                        className={`oa-chat-widget__msg ${msg.self ? 'oa-chat-widget__msg--self' : ''}`}
+                      >
+                        <div className="oa-chat-widget__msg-avatar">{msg.avatar}</div>
+                        <div className="oa-chat-widget__msg-body">
+                          <div className="oa-chat-widget__msg-meta">
+                            <span>{msg.sender}</span>
+                            <span>{msg.time}</span>
+                          </div>
+                          <div className="oa-chat-widget__msg-bubble">{msg.content}</div>
+                        </div>
+                      </div>
+                    ))}
+                    <div ref={messagesEndRef} />
+                  </div>
+
+                  <div className="oa-chat-widget__input">
+                    <input
+                      type="text"
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSend()
+                      }}
+                      placeholder="输入消息，Enter 发送"
+                    />
+                    <button
+                      className="oa-chat-widget__send"
+                      onClick={handleSend}
+                      disabled={!input.trim()}
+                      aria-label="发送"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M22 2L11 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="oa-chat-widget__empty">
+                  <div className="oa-chat-widget__empty-icon">💬</div>
+                  <div>选择一个会话开始聊天</div>
+                </div>
+              )}
+            </section>
           </div>
         </div>
       )}

@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
+import { CloseOutlined } from '@ant-design/icons'
 import '../module.css'
 
 const DEFAULT_WIDTH = 820
@@ -204,7 +205,7 @@ export function ChatWidget() {
               onClick={() => setOpen(false)}
               aria-label="关闭"
             >
-              ×
+              <CloseOutlined />
             </button>
           </div>
 
